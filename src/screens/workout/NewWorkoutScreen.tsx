@@ -38,6 +38,8 @@ export default function NewWorkoutScreen() {
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [loadedFromTemplate, setLoadedFromTemplate] = useState(false);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
 
   // Fetch user's categories
   const { data: userCategories } = useQuery({
@@ -56,6 +58,12 @@ export default function NewWorkoutScreen() {
   const { data: allTemplates } = useQuery({
     queryKey: ['allTemplates'],
     queryFn: () => templateService.getPublicTemplates(),
+  });
+
+  // Fetch all exercises for adding manually
+  const { data: allExercises } = useQuery({
+    queryKey: ['allExercises'],
+    queryFn: () => workoutService.getExercises(),
   });
 
   // Auto-select most recent category on mount
@@ -172,9 +180,24 @@ export default function NewWorkoutScreen() {
     setExercises(updated);
   };
 
+  const addExercise = (exerciseId: string, exerciseName: string) => {
+    const newExercise: WorkoutExercise = {
+      exerciseId,
+      exerciseName,
+      sets: [
+        { reps: '10', weight: '' },
+        { reps: '10', weight: '' },
+        { reps: '10', weight: '' },
+      ],
+    };
+    setExercises([...exercises, newExercise]);
+    setShowExerciseModal(false);
+    setExerciseSearch('');
+  };
+
   const handleSave = () => {
     if (exercises.length === 0) {
-      alert('Please select a category or template to load exercises');
+      alert('Please add some exercises to your workout');
       return;
     }
     saveWorkout.mutate();
@@ -281,6 +304,36 @@ export default function NewWorkoutScreen() {
         </Card.Content>
       </Card>
 
+      {/* Add Exercise Button */}
+      {exercises.length === 0 ? (
+        <Card style={styles.section}>
+          <Card.Content style={styles.emptyState}>
+            <Text variant="bodyLarge" style={styles.emptyText}>
+              No exercises added yet
+            </Text>
+            <Button
+              mode="contained"
+              icon="plus"
+              onPress={() => setShowExerciseModal(true)}
+              style={styles.addExerciseButton}
+            >
+              Add Your First Exercise
+            </Button>
+          </Card.Content>
+        </Card>
+      ) : (
+        <View style={styles.addExerciseButtonContainer}>
+          <Button
+            mode="outlined"
+            icon="plus"
+            onPress={() => setShowExerciseModal(true)}
+            style={styles.addExerciseButtonOutlined}
+          >
+            Add Exercise
+          </Button>
+        </View>
+      )}
+
       {/* Exercises List */}
       {exercises.map((exercise, exerciseIndex) => (
         <Card key={exerciseIndex} style={styles.section}>
@@ -336,7 +389,7 @@ export default function NewWorkoutScreen() {
         </Card>
       ))}
 
-      {/* Template Selection Modal (for new users) */}
+      {/* Template Selection Modal */}
       <Portal>
         <Modal
           visible={showTemplateModal}
@@ -361,6 +414,59 @@ export default function NewWorkoutScreen() {
           <Button
             mode="outlined"
             onPress={() => setShowTemplateModal(false)}
+            style={styles.modalCloseButton}
+          >
+            Cancel
+          </Button>
+        </Modal>
+
+        {/* Exercise Selection Modal */}
+        <Modal
+          visible={showExerciseModal}
+          onDismiss={() => {
+            setShowExerciseModal(false);
+            setExerciseSearch('');
+          }}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Text variant="headlineSmall" style={styles.modalTitle}>
+            Add Exercise
+          </Text>
+          <TextInput
+            label="Search exercises"
+            value={exerciseSearch}
+            onChangeText={setExerciseSearch}
+            mode="outlined"
+            style={styles.searchInput}
+            autoFocus
+          />
+          <ScrollView style={styles.modalScroll}>
+            {allExercises
+              ?.filter(ex =>
+                ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
+              )
+              .map((exercise) => (
+                <List.Item
+                  key={exercise.id}
+                  title={exercise.canonical_name}
+                  description={exercise.category || 'Exercise'}
+                  left={(props) => <List.Icon {...props} icon="weight-lifter" />}
+                  onPress={() => addExercise(exercise.id, exercise.canonical_name)}
+                  style={styles.templateItem}
+                />
+              ))}
+            {allExercises && allExercises.filter(ex =>
+              ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
+            ).length === 0 && (
+              <Text style={styles.noResults}>No exercises found</Text>
+            )}
+          </ScrollView>
+          <Button
+            mode="outlined"
+            onPress={() => {
+              setShowExerciseModal(false);
+              setExerciseSearch('');
+            }}
             style={styles.modalCloseButton}
           >
             Cancel
@@ -423,6 +529,34 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
     marginBottom: 12,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyText: {
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  addExerciseButton: {
+    marginTop: 8,
+  },
+  addExerciseButtonContainer: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  addExerciseButtonOutlined: {
+    width: '100%',
+  },
+  searchInput: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  noResults: {
+    textAlign: 'center',
+    color: '#666',
+    padding: 20,
   },
   exerciseBlock: {
     gap: 8,
