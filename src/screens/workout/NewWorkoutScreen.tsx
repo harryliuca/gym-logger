@@ -127,22 +127,27 @@ export default function NewWorkoutScreen() {
   // Save workout mutation
   const saveWorkout = useMutation({
     mutationFn: async () => {
+      console.log('Saving workout with exercises:', exercises);
       const session = await workoutService.createSession(
         date,
         '',  // notes
         workoutCategory || 'Custom'
       );
+      console.log('Session created:', session);
 
       for (let i = 0; i < exercises.length; i++) {
         const exercise = exercises[i];
+        console.log(`Processing exercise ${i}:`, exercise);
         const sets = exercise.sets
-          .filter(s => s.reps && s.weight)
+          .filter(s => s.reps) // Only require reps, weight can be 0
           .map((s, idx) => ({
             set: idx + 1,
             reps: parseInt(s.reps) || 0,
             weight: parseFloat(s.weight) || 0,
             unit: 'lb' as const,
           }));
+
+        console.log(`Filtered sets for exercise ${i}:`, sets);
 
         if (sets.length > 0) {
           await workoutService.addExerciseToSession(
@@ -151,6 +156,9 @@ export default function NewWorkoutScreen() {
             sets,
             i
           );
+          console.log(`Added exercise ${i} to session`);
+        } else {
+          console.log(`Skipping exercise ${i} - no valid sets`);
         }
       }
 
@@ -162,6 +170,11 @@ export default function NewWorkoutScreen() {
       queryClient.invalidateQueries({ queryKey: ['allSessions'] });
       queryClient.invalidateQueries({ queryKey: ['userCategories'] });
       navigate('dashboard');
+    },
+    onError: (error) => {
+      console.error('Error saving workout:', error);
+      setVoiceTranscript(`Error saving workout: ${error.message}`);
+      setTimeout(() => setVoiceTranscript(''), 5000);
     },
   });
 
