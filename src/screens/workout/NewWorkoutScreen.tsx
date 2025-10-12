@@ -187,6 +187,11 @@ export default function NewWorkoutScreen() {
     setExercises(updated);
   };
 
+  const deleteExercise = (exerciseIndex: number) => {
+    const updated = exercises.filter((_, index) => index !== exerciseIndex);
+    setExercises(updated);
+  };
+
   const addExercise = (exerciseId: string, exerciseName: string) => {
     const newExercise: WorkoutExercise = {
       exerciseId,
@@ -514,40 +519,20 @@ export default function NewWorkoutScreen() {
         </Card.Content>
       </Card>
 
-      {/* Add Exercise Button */}
-      {exercises.length === 0 ? (
-        <Card style={styles.section}>
-          <Card.Content style={styles.emptyState}>
-            <Text variant="bodyLarge" style={styles.emptyText}>
-              No exercises added yet
-            </Text>
-            <Button
-              mode="contained"
-              icon="plus"
-              onPress={() => setShowExerciseModal(true)}
-              style={styles.addExerciseButton}
-            >
-              Add Your First Exercise
-            </Button>
-          </Card.Content>
-        </Card>
-      ) : (
-        <View style={styles.addExerciseButtonContainer}>
-          <Button
-            mode="outlined"
-            icon="plus"
-            onPress={() => setShowExerciseModal(true)}
-            style={styles.addExerciseButtonOutlined}
-          >
-            Add Exercise
-          </Button>
-        </View>
-      )}
-
       {/* Exercises List */}
       {exercises.map((exercise, exerciseIndex) => (
         <Card key={exerciseIndex} style={styles.section}>
-          <Card.Title title={exercise.exerciseName} />
+          <Card.Title
+            title={exercise.exerciseName}
+            right={(props) => (
+              <IconButton
+                {...props}
+                icon="delete"
+                iconColor="#f44336"
+                onPress={() => deleteExercise(exerciseIndex)}
+              />
+            )}
+          />
           <Card.Content>
             <View style={styles.exerciseBlock}>
               {exercise.sets.map((set, setIndex) => (
