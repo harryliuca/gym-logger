@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type Screen = 'dashboard' | 'history' | 'newWorkout' | 'sessionDetail';
+export type Screen = 'dashboard' | 'history' | 'newWorkout' | 'sessionDetail' | 'stats';
 
 interface NavigationContextType {
   currentScreen: Screen;

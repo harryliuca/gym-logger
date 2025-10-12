@@ -112,8 +112,16 @@ export default function DashboardScreen() {
             mode="contained"
             icon="plus"
             onPress={() => navigate('newWorkout')}
+            style={styles.actionButton}
           >
             New Workout
+          </Button>
+          <Button
+            mode="outlined"
+            icon="chart-line"
+            onPress={() => navigate('stats')}
+          >
+            View Statistics
           </Button>
         </Card.Content>
       </Card>
@@ -264,6 +272,9 @@ const styles = StyleSheet.create({
   section: {
     margin: 16,
     marginTop: 0,
+  },
+  actionButton: {
+    marginBottom: 12,
   },
   emptyText: {
     textAlign: 'center',

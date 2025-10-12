@@ -296,4 +296,183 @@ export const workoutService = {
       lastWorkoutDate: recentSession?.session_date || null,
     };
   },
+
+  /**
+   * Get volume trend over time (for charts)
+   */
+  async getVolumeTrend(): Promise<{ date: string; volume: number }[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select(`
+        session_date,
+        session_exercises (
+          total_volume
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: true });
+
+    if (!sessions) return [];
+
+    return sessions.map(session => {
+      const totalVolume = session.session_exercises?.reduce(
+        (sum: number, ex: any) => sum + (ex.total_volume || 0),
+        0
+      ) || 0;
+
+      return {
+        date: session.session_date,
+        volume: totalVolume,
+      };
+    });
+  },
+
+  /**
+   * Get personal records for each exercise
+   */
+  async getPersonalRecords(): Promise<{
+    exercise: string;
+    maxWeight: number;
+    maxReps: number;
+    maxVolume: number;
+    date: string;
+  }[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select(`
+        session_date,
+        session_exercises (
+          exercise_id,
+          sets,
+          total_volume,
+          exercises (
+            canonical_name
+          )
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: false });
+
+    if (!sessions) return [];
+
+    // Calculate PRs by exercise
+    const prsByExercise = new Map<string, {
+      exercise: string;
+      maxWeight: number;
+      maxReps: number;
+      maxVolume: number;
+      date: string;
+    }>();
+
+    sessions.forEach(session => {
+      session.session_exercises?.forEach((ex: any) => {
+        const exerciseName = ex.exercises.canonical_name;
+        const sets = ex.sets || [];
+
+        // Find max weight and max reps in this session
+        let maxWeight = 0;
+        let maxReps = 0;
+        sets.forEach((set: any) => {
+          if (set.weight > maxWeight) maxWeight = set.weight;
+          if (set.reps > maxReps) maxReps = set.reps;
+        });
+
+        const existing = prsByExercise.get(exerciseName);
+        if (!existing || ex.total_volume > existing.maxVolume) {
+          prsByExercise.set(exerciseName, {
+            exercise: exerciseName,
+            maxWeight: Math.max(existing?.maxWeight || 0, maxWeight),
+            maxReps: Math.max(existing?.maxReps || 0, maxReps),
+            maxVolume: ex.total_volume,
+            date: session.session_date,
+          });
+        }
+      });
+    });
+
+    return Array.from(prsByExercise.values()).sort((a, b) =>
+      b.maxVolume - a.maxVolume
+    );
+  },
+
+  /**
+   * Get workout frequency stats
+   */
+  async getWorkoutFrequency(): Promise<{
+    totalDays: number;
+    workoutDays: number;
+    averagePerWeek: number;
+    currentStreak: number;
+    longestStreak: number;
+  }> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select('session_date')
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: true });
+
+    if (!sessions || sessions.length === 0) {
+      return {
+        totalDays: 0,
+        workoutDays: 0,
+        averagePerWeek: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+      };
+    }
+
+    const dates = sessions.map(s => new Date(s.session_date).toDateString());
+    const uniqueDates = [...new Set(dates)];
+
+    const firstDate = new Date(sessions[0].session_date);
+    const lastDate = new Date(sessions[sessions.length - 1].session_date);
+    const totalDays = Math.ceil((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    const averagePerWeek = (uniqueDates.length / totalDays) * 7;
+
+    // Calculate streaks
+    let currentStreak = 0;
+    let longestStreak = 0;
+    let tempStreak = 1;
+
+    const sortedDates = uniqueDates.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+
+    for (let i = 1; i < sortedDates.length; i++) {
+      const diffDays = Math.ceil((sortedDates[i].getTime() - sortedDates[i - 1].getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 2) { // Allow 1 day gap
+        tempStreak++;
+      } else {
+        longestStreak = Math.max(longestStreak, tempStreak);
+        tempStreak = 1;
+      }
+    }
+    longestStreak = Math.max(longestStreak, tempStreak);
+
+    // Check current streak
+    const today = new Date();
+    const lastWorkout = sortedDates[sortedDates.length - 1];
+    const daysSinceLastWorkout = Math.ceil((today.getTime() - lastWorkout.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceLastWorkout <= 2) {
+      currentStreak = tempStreak;
+    }
+
+    return {
+      totalDays,
+      workoutDays: uniqueDates.length,
+      averagePerWeek: Math.round(averagePerWeek * 10) / 10,
+      currentStreak,
+      longestStreak,
+    };
+  },
 };
