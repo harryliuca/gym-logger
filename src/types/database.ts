@@ -19,6 +19,10 @@ export interface Profile {
   total_sessions: number;
   total_volume: number;
   last_workout_date: string | null;
+
+  // Public profile
+  is_public: boolean;
+  public_username: string | null;
 }
 
 export interface Exercise {

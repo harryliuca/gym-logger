@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, Card, Button, ActivityIndicator, Chip } from 'react-native-paper';
+import { Text, Card, Button, ActivityIndicator, Chip, IconButton } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import { workoutService, WorkoutSessionWithExercises } from '../../services/workouts';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,19 +8,31 @@ import { useNavigation } from '../../contexts/NavigationContext';
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
-  const { navigate } = useNavigation();
+  const { navigate, params } = useNavigation();
   const [sessionLimit, setSessionLimit] = React.useState(3);
 
-  // Fetch user stats
+  // Check if viewing another user's profile
+  const viewingUserId = params?.userId;
+  const isViewingOtherUser = viewingUserId && viewingUserId !== user?.id;
+
+  // Fetch user stats (for current user or public user)
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['userStats'],
-    queryFn: () => workoutService.getUserStats(),
+    queryKey: ['userStats', viewingUserId || user?.id],
+    queryFn: () =>
+      viewingUserId
+        ? workoutService.getUserStatsForUser(viewingUserId)
+        : workoutService.getUserStats(),
+    enabled: !!user || !!viewingUserId,
   });
 
-  // Fetch recent sessions
+  // Fetch recent sessions (for current user or public user)
   const { data: recentSessions, isLoading: sessionsLoading } = useQuery({
-    queryKey: ['recentSessions', sessionLimit],
-    queryFn: () => workoutService.getRecentSessions(sessionLimit),
+    queryKey: ['recentSessions', viewingUserId || user?.id, sessionLimit],
+    queryFn: () =>
+      viewingUserId
+        ? workoutService.getPublicUserSessions(viewingUserId).then(sessions => sessions.slice(0, sessionLimit))
+        : workoutService.getRecentSessions(sessionLimit),
+    enabled: !!user || !!viewingUserId,
   });
 
   const handleViewMore = () => {
@@ -53,17 +65,37 @@ export default function DashboardScreen() {
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text variant="headlineMedium" style={styles.title}>
-            Gym Logger
-          </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            {user?.email}
-          </Text>
-        </View>
-        <Button mode="outlined" onPress={signOut}>
-          Sign Out
-        </Button>
+        {isViewingOtherUser ? (
+          <View style={styles.headerLeft}>
+            <IconButton
+              icon="arrow-left"
+              size={24}
+              onPress={() => navigate('browsePublicProfiles')}
+            />
+            <View>
+              <Text variant="headlineMedium" style={styles.title}>
+                Public Profile
+              </Text>
+              <Text variant="bodyMedium" style={styles.subtitle}>
+                Viewing workout history
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            <View>
+              <Text variant="headlineMedium" style={styles.title}>
+                Gym Logger
+              </Text>
+              <Text variant="bodyMedium" style={styles.subtitle}>
+                {user?.email}
+              </Text>
+            </View>
+            <Button mode="outlined" onPress={signOut}>
+              Sign Out
+            </Button>
+          </>
+        )}
       </View>
 
       {/* Stats Cards */}
@@ -104,27 +136,37 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* Quick Actions */}
-      <Card style={styles.section}>
-        <Card.Title title="Quick Actions" />
-        <Card.Content>
-          <Button
-            mode="contained"
-            icon="plus"
-            onPress={() => navigate('newWorkout')}
-            style={styles.actionButton}
-          >
-            New Workout
-          </Button>
-          <Button
-            mode="outlined"
-            icon="chart-line"
-            onPress={() => navigate('stats')}
-          >
-            View Statistics
-          </Button>
-        </Card.Content>
-      </Card>
+      {/* Quick Actions - Only show for own profile */}
+      {!isViewingOtherUser && (
+        <Card style={styles.section}>
+          <Card.Title title="Quick Actions" />
+          <Card.Content>
+            <Button
+              mode="contained"
+              icon="plus"
+              onPress={() => navigate('newWorkout')}
+              style={styles.actionButton}
+            >
+              New Workout
+            </Button>
+            <Button
+              mode="outlined"
+              icon="chart-line"
+              onPress={() => navigate('stats')}
+              style={styles.actionButton}
+            >
+              View Statistics
+            </Button>
+            <Button
+              mode="outlined"
+              icon="account-group"
+              onPress={() => navigate('browsePublicProfiles')}
+            >
+              Browse Public Profiles
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Recent Sessions */}
       <Card style={styles.section}>
@@ -241,9 +283,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingLeft: 4,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontWeight: 'bold',

@@ -7,6 +7,89 @@ export interface WorkoutSessionWithExercises extends WorkoutSession {
   })[];
 }
 
+export const profileService = {
+  /**
+   * Get all public profiles with calculated stats
+   */
+  async getPublicProfiles() {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, email, display_name, public_username, is_public')
+      .eq('is_public', true);
+
+    if (error) throw error;
+
+    // Calculate stats for each profile
+    const profilesWithStats = await Promise.all(
+      profiles.map(async (profile) => {
+        const stats = await workoutService.getUserStatsForUser(profile.id);
+        return {
+          ...profile,
+          total_sessions: stats.totalSessions,
+          total_volume: stats.totalVolume,
+          last_workout_date: stats.lastWorkoutDate,
+        };
+      })
+    );
+
+    // Sort by total volume
+    return profilesWithStats.sort((a, b) => b.total_volume - a.total_volume);
+  },
+
+  /**
+   * Get a specific user's public profile data
+   */
+  async getPublicProfile(userId: string) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, display_name, public_username, is_public, total_sessions, total_volume, last_workout_date')
+      .eq('id', userId)
+      .eq('is_public', true)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Toggle current user's public profile setting
+   */
+  async togglePublicProfile(isPublic: boolean, publicUsername?: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error} = await supabase
+      .from('profiles')
+      .update({
+        is_public: isPublic,
+        public_username: publicUsername || null,
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get current user's profile
+   */
+  async getMyProfile() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+
 export const workoutService = {
   /**
    * Get all workout sessions for the current user
@@ -25,6 +108,26 @@ export const workoutService = {
         )
       `)
       .eq('user_id', user.id)
+      .order('session_date', { ascending: false });
+
+    if (error) throw error;
+    return data as WorkoutSessionWithExercises[];
+  },
+
+  /**
+   * Get workout sessions for a public user
+   */
+  async getPublicUserSessions(userId: string): Promise<WorkoutSessionWithExercises[]> {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select(`
+        *,
+        session_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('user_id', userId)
       .order('session_date', { ascending: false });
 
     if (error) throw error;
@@ -256,11 +359,18 @@ export const workoutService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    return this.getUserStatsForUser(user.id);
+  },
+
+  /**
+   * Get stats for any user (for public profiles)
+   */
+  async getUserStatsForUser(userId: string) {
     // Get total sessions
     const { count: totalSessions } = await supabase
       .from('workout_sessions')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     // Get total volume by summing all session_exercises for user's sessions
     const { data: sessions } = await supabase
@@ -271,7 +381,7 @@ export const workoutService = {
           total_volume
         )
       `)
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     // Calculate total volume from all session_exercises
     let totalVolume = 0;
@@ -285,7 +395,7 @@ export const workoutService = {
     const { data: recentSession } = await supabase
       .from('workout_sessions')
       .select('session_date')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('session_date', { ascending: false })
       .limit(1)
       .single();
