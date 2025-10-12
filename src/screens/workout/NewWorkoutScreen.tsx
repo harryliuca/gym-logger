@@ -128,12 +128,12 @@ export default function NewWorkoutScreen() {
   const saveWorkout = useMutation({
     mutationFn: async () => {
       console.log('Saving workout with exercises:', exercises);
-      const session = await workoutService.createSession(
+      const session = await workoutService.getOrCreateSession(
         date,
         '',  // notes
         workoutCategory || 'Custom'
       );
-      console.log('Session created:', session);
+      console.log('Session (created or found):', session);
 
       for (let i = 0; i < exercises.length; i++) {
         const exercise = exercises[i];

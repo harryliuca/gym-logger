@@ -331,6 +331,58 @@ export const workoutService = {
   },
 
   /**
+   * Get or create a workout session for a specific date
+   * If a session already exists for that date, return it
+   * Otherwise, create a new one
+   */
+  async getOrCreateSession(
+    sessionDate: string,
+    notes?: string,
+    category?: string
+  ): Promise<WorkoutSession> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // First, try to find an existing session for this date
+    const { data: existingSession } = await supabase
+      .from('workout_sessions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('session_date', sessionDate)
+      .maybeSingle();
+
+    if (existingSession) {
+      // Update category if provided
+      if (category && existingSession.category !== category) {
+        const { data: updated } = await supabase
+          .from('workout_sessions')
+          .update({ category })
+          .eq('id', existingSession.id)
+          .select()
+          .single();
+        return updated || existingSession;
+      }
+      return existingSession;
+    }
+
+    // No existing session, create a new one
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .insert({
+        user_id: user.id,
+        session_date: sessionDate,
+        notes: notes || '',
+        category: category || null,
+        total_volume: 0,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
    * Create a new workout session
    */
   async createSession(
