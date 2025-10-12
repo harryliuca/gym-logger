@@ -4,7 +4,6 @@ import { Text, Card, ActivityIndicator, Chip, DataTable, IconButton } from 'reac
 import { useQuery } from '@tanstack/react-query';
 import { workoutService } from '../../services/workouts';
 import { useNavigation } from '../../contexts/NavigationContext';
-import { VictoryLine, VictoryChart, VictoryAxis, VictoryTheme } from 'victory-native';
 
 export default function StatsScreen() {
   const { navigate } = useNavigation();
@@ -43,11 +42,8 @@ export default function StatsScreen() {
   }
 
   // Prepare chart data
-  const chartData = volumeTrend?.map((item, index) => ({
-    x: index + 1,
-    y: item.volume,
-    label: formatDate(item.date),
-  })) || [];
+  const maxVolume = Math.max(...(volumeTrend?.map(v => v.volume) || [1]));
+  const recentTrend = volumeTrend?.slice(-10) || [];
 
   return (
     <ScrollView style={styles.container}>
@@ -110,39 +106,33 @@ export default function StatsScreen() {
       </Card>
 
       {/* Volume Trend Chart */}
-      {chartData.length > 0 && (
+      {recentTrend.length > 0 && (
         <Card style={styles.section}>
-          <Card.Title title="Volume Over Time" />
+          <Card.Title title="Volume Trend (Last 10 Workouts)" />
           <Card.Content>
-            <VictoryChart
-              theme={VictoryTheme.material}
-              height={250}
-              width={Dimensions.get('window').width - 64}
-              padding={{ left: 60, right: 20, top: 20, bottom: 40 }}
-            >
-              <VictoryAxis
-                style={{
-                  tickLabels: { fontSize: 10, angle: -45, textAnchor: 'end' },
-                }}
-                tickFormat={(t) => {
-                  const item = chartData[t - 1];
-                  return item ? item.label : '';
-                }}
-              />
-              <VictoryAxis
-                dependentAxis
-                style={{
-                  tickLabels: { fontSize: 10 },
-                }}
-                tickFormat={(t) => `${Math.round(t / 1000)}k`}
-              />
-              <VictoryLine
-                data={chartData}
-                style={{
-                  data: { stroke: '#6200ee', strokeWidth: 2 },
-                }}
-              />
-            </VictoryChart>
+            <View style={styles.chartContainer}>
+              {recentTrend.map((item, index) => {
+                const heightPercent = (item.volume / maxVolume) * 100;
+                return (
+                  <View key={index} style={styles.barContainer}>
+                    <View style={styles.barWrapper}>
+                      <View
+                        style={[
+                          styles.bar,
+                          { height: `${heightPercent}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text variant="bodySmall" style={styles.barLabel}>
+                      {formatDate(item.date)}
+                    </Text>
+                    <Text variant="bodySmall" style={styles.barValue}>
+                      {Math.round(item.volume / 1000)}k
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
             <Text variant="bodySmall" style={styles.chartCaption}>
               Total volume (lb) per workout session
             </Text>
@@ -245,6 +235,43 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 4,
+  },
+  chartContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 200,
+    paddingVertical: 16,
+    gap: 4,
+  },
+  barContainer: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  barWrapper: {
+    width: '100%',
+    height: 150,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  bar: {
+    width: '80%',
+    backgroundColor: '#6200ee',
+    borderRadius: 4,
+    minHeight: 4,
+  },
+  barLabel: {
+    fontSize: 9,
+    color: '#666',
+    textAlign: 'center',
+    transform: [{ rotate: '-45deg' }],
+    width: 50,
+  },
+  barValue: {
+    fontSize: 10,
+    color: '#333',
+    fontWeight: '600',
   },
   chartCaption: {
     textAlign: 'center',
