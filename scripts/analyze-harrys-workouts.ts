@@ -1,0 +1,176 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+interface ExercisePattern {
+  exerciseName: string;
+  exerciseId: string;
+  frequency: number;
+  avgSets: number;
+  avgReps: number;
+  avgWeight: number;
+}
+
+async function analyzeWorkouts() {
+  console.log('Fetching Harry\'s workout sessions...\n');
+
+  // Get Harry's user ID
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', 'harry.liu.ca@gmail.com')
+    .single();
+
+  if (!profile) {
+    console.error('Could not find Harry\'s profile');
+    return;
+  }
+
+  const harryId = profile.id;
+  console.log(`Harry's ID: ${harryId}\n`);
+
+  // Get all workout sessions with exercises
+  const { data: sessions, error } = await supabase
+    .from('workout_sessions')
+    .select(`
+      id,
+      session_date,
+      category,
+      session_exercises (
+        id,
+        exercise_id,
+        sets,
+        exercises (
+          id,
+          canonical_name
+        )
+      )
+    `)
+    .eq('user_id', harryId)
+    .order('session_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching sessions:', error);
+    return;
+  }
+
+  console.log(`Total sessions: ${sessions?.length || 0}\n`);
+
+  // Group by category
+  const day1Sessions = sessions?.filter(s => s.category === 'Day 1') || [];
+  const day2Sessions = sessions?.filter(s => s.category === 'Day 2') || [];
+  const day3Sessions = sessions?.filter(s => s.category === 'Day 3') || [];
+
+  console.log(`Day 1 sessions: ${day1Sessions.length}`);
+  console.log(`Day 2 sessions: ${day2Sessions.length}`);
+  console.log(`Day 3 sessions: ${day3Sessions.length}\n`);
+
+  // Analyze each day
+  console.log('='.repeat(80));
+  console.log('DAY 1 ANALYSIS');
+  console.log('='.repeat(80));
+  analyzeDay(day1Sessions);
+
+  console.log('\n' + '='.repeat(80));
+  console.log('DAY 2 ANALYSIS');
+  console.log('='.repeat(80));
+  analyzeDay(day2Sessions);
+
+  console.log('\n' + '='.repeat(80));
+  console.log('DAY 3 ANALYSIS');
+  console.log('='.repeat(80));
+  analyzeDay(day3Sessions);
+}
+
+function analyzeDay(sessions: any[]) {
+  if (sessions.length === 0) {
+    console.log('No sessions found for this day');
+    return;
+  }
+
+  // Collect all exercises across sessions
+  const exerciseStats = new Map<string, {
+    id: string;
+    name: string;
+    count: number;
+    totalSets: number;
+    totalReps: number;
+    totalWeight: number;
+    setCount: number;
+  }>();
+
+  sessions.forEach(session => {
+    session.session_exercises?.forEach((se: any) => {
+      if (!se.exercises) return;
+
+      const exerciseId = se.exercise_id;
+      const exerciseName = se.exercises.canonical_name;
+      const sets = se.sets || [];
+
+      const existing = exerciseStats.get(exerciseId) || {
+        id: exerciseId,
+        name: exerciseName,
+        count: 0,
+        totalSets: 0,
+        totalReps: 0,
+        totalWeight: 0,
+        setCount: 0,
+      };
+
+      existing.count += 1;
+      existing.totalSets += sets.length;
+
+      sets.forEach((set: any) => {
+        existing.totalReps += set.reps || 0;
+        existing.totalWeight += set.weight || 0;
+        existing.setCount += 1;
+      });
+
+      exerciseStats.set(exerciseId, existing);
+    });
+  });
+
+  // Calculate averages and sort by frequency
+  const patterns: ExercisePattern[] = Array.from(exerciseStats.values())
+    .map(stat => ({
+      exerciseName: stat.name,
+      exerciseId: stat.id,
+      frequency: stat.count,
+      avgSets: Math.round(stat.totalSets / stat.count),
+      avgReps: stat.setCount > 0 ? Math.round(stat.totalReps / stat.setCount) : 0,
+      avgWeight: stat.setCount > 0 ? Math.round(stat.totalWeight / stat.setCount) : 0,
+    }))
+    .sort((a, b) => b.frequency - a.frequency);
+
+  // Display results
+  console.log(`\nExercises (sorted by frequency):\n`);
+  console.log('Exercise Name'.padEnd(30), 'Freq', 'Avg Sets', 'Avg Reps', 'Avg Weight');
+  console.log('-'.repeat(80));
+
+  patterns.forEach(p => {
+    console.log(
+      p.exerciseName.padEnd(30),
+      String(p.frequency).padEnd(5),
+      String(p.avgSets).padEnd(9),
+      String(p.avgReps).padEnd(9),
+      String(p.avgWeight).padEnd(10)
+    );
+  });
+
+  // Generate SQL INSERT statements
+  console.log('\n\nSQL INSERT statements for this day:\n');
+  patterns.forEach((p, index) => {
+    const repMin = Math.max(1, p.avgReps - 2);
+    const repMax = p.avgReps + 2;
+    console.log(`-- ${p.exerciseName}`);
+    console.log(`INSERT INTO public.template_exercises (template_id, exercise_id, display_order, suggested_sets, suggested_reps_min, suggested_reps_max)`);
+    console.log(`SELECT template_id, '${p.exerciseId}', ${index}, ${p.avgSets}, ${repMin}, ${repMax}`);
+    console.log(`FROM (SELECT id as template_id FROM public.workout_templates WHERE name = 'Harry''s Day X') t;`);
+    console.log('');
+  });
+}
+
+analyzeWorkouts().catch(console.error);

@@ -1,11 +1,113 @@
 import { supabase } from './supabase';
-import { WorkoutSession, SessionExercise, Exercise } from '../types/database';
+import { WorkoutSession, SessionExercise, Exercise, WorkoutTemplateWithExercises } from '../types/database';
 
 export interface WorkoutSessionWithExercises extends WorkoutSession {
   session_exercises: (SessionExercise & {
     exercises: Exercise;
   })[];
 }
+
+export const templateService = {
+  /**
+   * Get all public workout templates
+   */
+  async getPublicTemplates(): Promise<WorkoutTemplateWithExercises[]> {
+    const { data, error } = await supabase
+      .from('workout_templates')
+      .select(`
+        *,
+        template_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('is_public', true)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data as WorkoutTemplateWithExercises[];
+  },
+
+  /**
+   * Get a specific template by ID
+   */
+  async getTemplate(templateId: string): Promise<WorkoutTemplateWithExercises> {
+    const { data, error } = await supabase
+      .from('workout_templates')
+      .select(`
+        *,
+        template_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('id', templateId)
+      .single();
+
+    if (error) throw error;
+    return data as WorkoutTemplateWithExercises;
+  },
+
+  /**
+   * Get the most recently used template by user
+   * (based on workout sessions with matching template name)
+   */
+  async getMostRecentTemplate(): Promise<WorkoutTemplateWithExercises | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Get the most recent workout session
+    const { data: recentSession } = await supabase
+      .from('workout_sessions')
+      .select('category')
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!recentSession?.category) return null;
+
+    // Try to find a template matching the category
+    const { data: template } = await supabase
+      .from('workout_templates')
+      .select(`
+        *,
+        template_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('name', recentSession.category)
+      .eq('is_public', true)
+      .single();
+
+    return template as WorkoutTemplateWithExercises | null;
+  },
+
+  /**
+   * Get the most popular template (by usage count)
+   */
+  async getMostPopularTemplate(): Promise<WorkoutTemplateWithExercises | null> {
+    // For now, just return the first public template
+    // TODO: Track template usage and return actual most popular
+    const { data, error } = await supabase
+      .from('workout_templates')
+      .select(`
+        *,
+        template_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('is_public', true)
+      .limit(1)
+      .single();
+
+    if (error) return null;
+    return data as WorkoutTemplateWithExercises;
+  },
+};
 
 export const profileService = {
   /**
@@ -156,6 +258,56 @@ export const workoutService = {
 
     if (error) throw error;
     return data as WorkoutSessionWithExercises[];
+  },
+
+  /**
+   * Get the most recent workout session for a specific category
+   */
+  async getMostRecentWorkoutByCategory(category: string): Promise<WorkoutSessionWithExercises | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select(`
+        *,
+        session_exercises (
+          *,
+          exercises (*)
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('category', category)
+      .order('session_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) return null;
+    return data as WorkoutSessionWithExercises;
+  },
+
+  /**
+   * Get all unique workout categories for the current user
+   */
+  async getUserCategories(): Promise<string[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('category')
+      .eq('user_id', user.id)
+      .not('category', 'is', null)
+      .order('session_date', { ascending: false });
+
+    if (error) throw error;
+
+    // Get unique categories in order of most recent use
+    const categories = data
+      ?.map(s => s.category)
+      .filter((cat): cat is string => cat !== null);
+
+    return [...new Set(categories)];
   },
 
   /**

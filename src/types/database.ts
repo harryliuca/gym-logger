@@ -95,6 +95,37 @@ export interface WorkoutSessionWithExercises extends WorkoutSession {
   exercises: SessionExercise[];
 }
 
+// Workout Templates
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  is_public: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplateExercise {
+  id: string;
+  template_id: string;
+  exercise_id: string;
+  display_order: number;
+  suggested_sets: number;
+  suggested_reps_min: number | null;
+  suggested_reps_max: number | null;
+  notes: string | null;
+  created_at: string;
+
+  // Joined data
+  exercises?: Exercise;
+}
+
+export interface WorkoutTemplateWithExercises extends WorkoutTemplate {
+  template_exercises: TemplateExercise[];
+}
+
 // Voice input parsing types
 export interface ParsedExercise {
   exerciseName: string;
