@@ -58,7 +58,7 @@ Be creative but concise. Focus on the muscle groups or workout type. Return ONLY
           role: 'user',
           content: exercises,
         },
-      },
+      ],
     });
 
     const categoryName = completion.choices[0].message.content?.trim() || 'Custom Workout';
