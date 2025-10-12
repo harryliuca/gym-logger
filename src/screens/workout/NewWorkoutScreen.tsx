@@ -315,7 +315,8 @@ export default function NewWorkoutScreen() {
       console.log('Processed exercises:', workoutExercises);
 
       if (workoutExercises.length > 0) {
-        setExercises([...exercises, ...workoutExercises]);
+        // Add new exercises at the top of the list
+        setExercises([...workoutExercises, ...exercises]);
         alert(`Added ${workoutExercises.length} exercise(s) to your workout!`);
         // Clear transcript after success
         setTimeout(() => setVoiceTranscript(''), 3000);
