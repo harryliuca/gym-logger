@@ -40,6 +40,10 @@ export default function NewWorkoutScreen() {
   const [loadedFromTemplate, setLoadedFromTemplate] = useState(false);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
 
   // Fetch user's categories
   const { data: userCategories } = useQuery({
@@ -195,6 +199,137 @@ export default function NewWorkoutScreen() {
     setExerciseSearch('');
   };
 
+  const startVoiceInput = async () => {
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorder) {
+        mediaRecorder.stop();
+      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        setVoiceTranscript('Processing...');
+
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+
+        // Convert to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = (reader.result as string).split(',')[1];
+
+          try {
+            // Call Netlify function
+            const response = await fetch('/.netlify/functions/parse-workout-voice', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ audioBase64: base64Audio }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            setVoiceTranscript(data.transcript);
+            await processOpenAIResponse(data.exercises);
+          } catch (error: any) {
+            console.error('Error processing voice:', error);
+            alert(`Error: ${error.message}`);
+            setVoiceTranscript('');
+          }
+        };
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setVoiceTranscript('Recording... Tap to stop');
+    } catch (error: any) {
+      console.error('Error accessing microphone:', error);
+      alert(`Could not access microphone: ${error.message}`);
+    }
+  };
+
+  const processOpenAIResponse = async (parsedExercises: any[]) => {
+    try {
+      console.log('Processing OpenAI response:', parsedExercises);
+
+      const workoutExercises: WorkoutExercise[] = [];
+
+      for (const exercise of parsedExercises) {
+        const exerciseName = exercise.name;
+
+        // Find or create exercise
+        let exerciseId = allExercises?.find(ex =>
+          ex.canonical_name.toLowerCase() === exerciseName.toLowerCase()
+        )?.id;
+
+        if (!exerciseId) {
+          // Create new exercise
+          try {
+            console.log('Creating new exercise:', exerciseName);
+            const newEx = await workoutService.createExercise(exerciseName);
+            exerciseId = newEx.id;
+            // Invalidate exercises query to refresh the list
+            queryClient.invalidateQueries({ queryKey: ['allExercises'] });
+          } catch (error) {
+            console.error('Error creating exercise:', error);
+            alert(`Could not create exercise "${exerciseName}": ${error}`);
+            continue;
+          }
+        }
+
+        // Convert sets to our format
+        const sets = exercise.sets.map((set: any) => ({
+          reps: set.reps?.toString() || '10',
+          weight: set.weight?.toString() || '',
+        }));
+
+        workoutExercises.push({
+          exerciseId,
+          exerciseName,
+          sets,
+        });
+      }
+
+      console.log('Processed exercises:', workoutExercises);
+
+      if (workoutExercises.length > 0) {
+        setExercises([...exercises, ...workoutExercises]);
+        alert(`Added ${workoutExercises.length} exercise(s) to your workout!`);
+        // Clear transcript after success
+        setTimeout(() => setVoiceTranscript(''), 3000);
+      } else {
+        alert('Could not parse workout from voice input. Please try again.');
+        setVoiceTranscript('');
+      }
+    } catch (error) {
+      console.error('Error processing OpenAI response:', error);
+      alert(`Error processing workout: ${error}`);
+      setVoiceTranscript('');
+    }
+  };
+
   const handleSave = () => {
     if (exercises.length === 0) {
       alert('Please add some exercises to your workout');
@@ -290,6 +425,26 @@ export default function NewWorkoutScreen() {
                 ? `Loaded from template: "${selectedCategory}"`
                 : `Loaded from your most recent "${selectedCategory}" workout`}
             </Text>
+          )}
+
+          {/* Voice Input Button */}
+          <Button
+            mode="contained"
+            icon={isRecording ? "stop" : "microphone"}
+            onPress={startVoiceInput}
+            style={styles.voiceButton}
+            buttonColor={isRecording ? "#f44336" : "#4CAF50"}
+          >
+            {isRecording ? 'Recording... Tap to Stop' : 'Voice Input Workout'}
+          </Button>
+
+          {voiceTranscript && (
+            <Card style={styles.transcriptCard}>
+              <Card.Content>
+                <Text variant="bodySmall" style={styles.transcriptLabel}>Heard:</Text>
+                <Text variant="bodyMedium">{voiceTranscript}</Text>
+              </Card.Content>
+            </Card>
           )}
 
           <TextInput
@@ -529,6 +684,17 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
     marginBottom: 12,
+  },
+  voiceButton: {
+    marginBottom: 12,
+  },
+  transcriptCard: {
+    marginBottom: 12,
+    backgroundColor: '#E8F5E9',
+  },
+  transcriptLabel: {
+    color: '#666',
+    marginBottom: 4,
   },
   emptyState: {
     alignItems: 'center',
