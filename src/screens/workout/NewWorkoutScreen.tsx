@@ -32,7 +32,8 @@ export default function NewWorkoutScreen() {
   const queryClient = useQueryClient();
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
+  const [workoutCategory, setWorkoutCategory] = useState('');
+  const [isGeneratingCategory, setIsGeneratingCategory] = useState(false);
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
@@ -44,6 +45,7 @@ export default function NewWorkoutScreen() {
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Fetch user's categories
   const { data: userCategories } = useQuery({
@@ -98,6 +100,7 @@ export default function NewWorkoutScreen() {
       })) || [];
 
     setExercises(loadedExercises);
+    setWorkoutCategory(workout.category || '');
     setLoadedFromTemplate(false);
   };
 
@@ -126,8 +129,8 @@ export default function NewWorkoutScreen() {
     mutationFn: async () => {
       const session = await workoutService.createSession(
         date,
-        notes,
-        selectedCategory || 'Custom'
+        '',  // notes
+        workoutCategory || 'Custom'
       );
 
       for (let i = 0; i < exercises.length; i++) {
@@ -251,8 +254,8 @@ export default function NewWorkoutScreen() {
             await processOpenAIResponse(data.exercises);
           } catch (error: any) {
             console.error('Error processing voice:', error);
-            alert(`Error: ${error.message}`);
-            setVoiceTranscript('');
+            setVoiceTranscript(`Error: ${error.message}`);
+            setTimeout(() => setVoiceTranscript(''), 5000);
           }
         };
 
@@ -266,7 +269,41 @@ export default function NewWorkoutScreen() {
       setVoiceTranscript('Recording... Tap to stop');
     } catch (error: any) {
       console.error('Error accessing microphone:', error);
-      alert(`Could not access microphone: ${error.message}`);
+      setVoiceTranscript(`Could not access microphone: ${error.message}`);
+      setTimeout(() => setVoiceTranscript(''), 5000);
+    }
+  };
+
+  const generateCategoryName = async () => {
+    if (exercises.length === 0) {
+      setVoiceTranscript('Add exercises first to generate category name');
+      setTimeout(() => setVoiceTranscript(''), 3000);
+      return;
+    }
+
+    setIsGeneratingCategory(true);
+
+    try {
+      const exerciseNames = exercises.map(ex => ex.exerciseName).join(', ');
+
+      const response = await fetch('/.netlify/functions/generate-workout-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exercises: exerciseNames }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setWorkoutCategory(data.categoryName);
+    } catch (error: any) {
+      console.error('Error generating category:', error);
+      setVoiceTranscript(`Error generating name: ${error.message}`);
+      setTimeout(() => setVoiceTranscript(''), 5000);
+    } finally {
+      setIsGeneratingCategory(false);
     }
   };
 
@@ -294,7 +331,8 @@ export default function NewWorkoutScreen() {
             queryClient.invalidateQueries({ queryKey: ['allExercises'] });
           } catch (error) {
             console.error('Error creating exercise:', error);
-            alert(`Could not create exercise "${exerciseName}": ${error}`);
+            setVoiceTranscript(`Could not create exercise "${exerciseName}"`);
+            setTimeout(() => setVoiceTranscript(''), 5000);
             continue;
           }
         }
@@ -317,17 +355,20 @@ export default function NewWorkoutScreen() {
       if (workoutExercises.length > 0) {
         // Add new exercises at the top of the list
         setExercises([...workoutExercises, ...exercises]);
-        alert(`Added ${workoutExercises.length} exercise(s) to your workout!`);
-        // Clear transcript after success
-        setTimeout(() => setVoiceTranscript(''), 3000);
+        setSuccessMessage(`✓ Added ${workoutExercises.length} exercise(s)`);
+        // Clear messages after success
+        setTimeout(() => {
+          setVoiceTranscript('');
+          setSuccessMessage('');
+        }, 3000);
       } else {
-        alert('Could not parse workout from voice input. Please try again.');
-        setVoiceTranscript('');
+        setVoiceTranscript('Could not parse workout. Please try again.');
+        setTimeout(() => setVoiceTranscript(''), 5000);
       }
     } catch (error) {
       console.error('Error processing OpenAI response:', error);
-      alert(`Error processing workout: ${error}`);
-      setVoiceTranscript('');
+      setVoiceTranscript(`Error processing workout`);
+      setTimeout(() => setVoiceTranscript(''), 5000);
     }
   };
 
@@ -376,12 +417,11 @@ export default function NewWorkoutScreen() {
           />
 
           {/* Category Selection */}
-          <Text variant="bodyMedium" style={styles.label}>
-            Load Workout From
-          </Text>
-
-          <View style={styles.buttonRow}>
-            {userCategories && userCategories.length > 0 && (
+          {userCategories && userCategories.length > 0 && (
+            <>
+              <Text variant="bodyMedium" style={styles.label}>
+                Load Workout From
+              </Text>
               <Menu
                 visible={categoryMenuVisible}
                 onDismiss={() => setCategoryMenuVisible(false)}
@@ -390,7 +430,7 @@ export default function NewWorkoutScreen() {
                     mode="outlined"
                     icon="history"
                     onPress={() => setCategoryMenuVisible(true)}
-                    style={styles.flexButton}
+                    style={styles.fullButton}
                   >
                     {selectedCategory || 'My Recent Workouts'}
                   </Button>
@@ -408,17 +448,8 @@ export default function NewWorkoutScreen() {
                   />
                 ))}
               </Menu>
-            )}
-
-            <Button
-              mode="outlined"
-              icon="view-list"
-              onPress={() => setShowTemplateModal(true)}
-              style={userCategories && userCategories.length > 0 ? styles.flexButton : styles.fullButton}
-            >
-              Templates
-            </Button>
-          </View>
+            </>
+          )}
 
           {selectedCategory && (
             <Text variant="bodySmall" style={styles.categoryHint}>
@@ -448,15 +479,38 @@ export default function NewWorkoutScreen() {
             </Card>
           )}
 
-          <TextInput
-            label="Notes (optional)"
-            value={notes}
-            onChangeText={setNotes}
-            mode="outlined"
-            multiline
-            numberOfLines={3}
-            style={styles.input}
-          />
+          {successMessage && (
+            <Card style={styles.successCard}>
+              <Card.Content>
+                <Text variant="bodyMedium" style={styles.successText}>{successMessage}</Text>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Workout Category Name */}
+          <Text variant="bodyMedium" style={styles.label}>
+            Workout Name
+          </Text>
+          <View style={styles.categoryInputRow}>
+            <TextInput
+              label="e.g., Leg Day, Upper Body, Full Body"
+              value={workoutCategory}
+              onChangeText={setWorkoutCategory}
+              mode="outlined"
+              style={styles.categoryInput}
+            />
+            <Button
+              mode="contained"
+              icon="auto-fix"
+              onPress={generateCategoryName}
+              loading={isGeneratingCategory}
+              disabled={isGeneratingCategory || exercises.length === 0}
+              style={styles.generateButton}
+              compact
+            >
+              Generate
+            </Button>
+          </View>
         </Card.Content>
       </Card>
 
@@ -545,38 +599,8 @@ export default function NewWorkoutScreen() {
         </Card>
       ))}
 
-      {/* Template Selection Modal */}
+      {/* Exercise Selection Modal */}
       <Portal>
-        <Modal
-          visible={showTemplateModal}
-          onDismiss={() => setShowTemplateModal(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <Text variant="headlineSmall" style={styles.modalTitle}>
-            Choose a Workout Template
-          </Text>
-          <ScrollView style={styles.modalScroll}>
-            {allTemplates?.map((template) => (
-              <List.Item
-                key={template.id}
-                title={template.name}
-                description={`${template.category} • ${template.template_exercises?.length || 0} exercises`}
-                left={(props) => <List.Icon {...props} icon="dumbbell" />}
-                onPress={() => loadTemplate(template)}
-                style={styles.templateItem}
-              />
-            ))}
-          </ScrollView>
-          <Button
-            mode="outlined"
-            onPress={() => setShowTemplateModal(false)}
-            style={styles.modalCloseButton}
-          >
-            Cancel
-          </Button>
-        </Modal>
-
-        {/* Exercise Selection Modal */}
         <Modal
           visible={showExerciseModal}
           onDismiss={() => {
@@ -696,6 +720,26 @@ const styles = StyleSheet.create({
   transcriptLabel: {
     color: '#666',
     marginBottom: 4,
+  },
+  successCard: {
+    marginBottom: 12,
+    backgroundColor: '#C8E6C9',
+  },
+  successText: {
+    color: '#2E7D32',
+    fontWeight: '500',
+  },
+  categoryInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+  categoryInput: {
+    flex: 1,
+  },
+  generateButton: {
+    marginTop: 8,
   },
   emptyState: {
     alignItems: 'center',
