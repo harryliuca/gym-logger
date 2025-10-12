@@ -144,6 +144,13 @@ export default function DashboardScreen() {
           )}
         </Card.Content>
       </Card>
+
+      {/* Version Info */}
+      <View style={styles.versionFooter}>
+        <Text variant="bodySmall" style={styles.versionText}>
+          Gym Logger v1.0.0
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -315,5 +322,13 @@ const styles = StyleSheet.create({
   volumeText: {
     color: '#666',
     fontWeight: '600',
+  },
+  versionFooter: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  versionText: {
+    color: '#999',
+    fontSize: 12,
   },
 });
