@@ -139,7 +139,7 @@ export default function NewWorkoutScreen() {
         const exercise = exercises[i];
         console.log(`Processing exercise ${i}:`, exercise);
         const sets = exercise.sets
-          .filter(s => s.reps) // Only require reps, weight can be 0
+          .filter(s => s.reps && parseInt(s.reps) > 0) // Only require reps > 0, weight can be 0
           .map((s, idx) => ({
             set: idx + 1,
             reps: parseInt(s.reps) || 0,
