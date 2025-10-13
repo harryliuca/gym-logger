@@ -69,15 +69,23 @@ export default function EditWorkoutScreen() {
     mutationFn: async () => {
       if (!session) throw new Error('Session not found');
 
+      console.log('Starting edit save - deleting existing exercises');
+
       // Step 1: Delete all existing session_exercises
       for (const exercise of session.session_exercises || []) {
         await workoutService.deleteSessionExercise(exercise.id);
       }
 
-      // Step 2: Update session category
-      if (workoutCategory) {
-        await workoutService.updateSession(session.id, {});
-      }
+      console.log('Updating category to:', workoutCategory);
+
+      // Step 2: Update session category using direct Supabase call
+      const { supabase } = await import('../../services/supabase');
+      await supabase
+        .from('workout_sessions')
+        .update({ category: workoutCategory || null })
+        .eq('id', session.id);
+
+      console.log('Adding new exercises:', exercises.length);
 
       // Step 3: Add new exercises
       for (let i = 0; i < exercises.length; i++) {
@@ -91,6 +99,8 @@ export default function EditWorkoutScreen() {
             unit: 'lb' as const,
           }));
 
+        console.log(`Exercise ${i}: ${exercise.exerciseName}, sets:`, sets);
+
         if (sets.length > 0) {
           await workoutService.addExerciseToSession(
             session.id,
@@ -101,6 +111,7 @@ export default function EditWorkoutScreen() {
         }
       }
 
+      console.log('Save complete!');
       return session;
     },
     onSuccess: () => {
