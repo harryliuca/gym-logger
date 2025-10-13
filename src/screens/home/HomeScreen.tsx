@@ -3,6 +3,7 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import DashboardScreen from './DashboardScreen';
 import HistoryScreen from '../history/HistoryScreen';
 import NewWorkoutScreen from '../workout/NewWorkoutScreen';
+import EditWorkoutScreen from '../workout/EditWorkoutScreen';
 import StatsScreen from '../stats/StatsScreen';
 import BrowsePublicProfilesScreen from '../public/BrowsePublicProfilesScreen';
 import PublicProfileView from '../public/PublicProfileView';
@@ -17,6 +18,8 @@ export default function HomeScreen() {
       return <HistoryScreen />;
     case 'newWorkout':
       return <NewWorkoutScreen />;
+    case 'editWorkout':
+      return <EditWorkoutScreen />;
     case 'stats':
       return <StatsScreen />;
     case 'browsePublicProfiles':

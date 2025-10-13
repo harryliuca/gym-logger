@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, Card, Button, ActivityIndicator, Chip, IconButton } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { View, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Text, Card, Button, ActivityIndicator, Chip, IconButton, Portal, Dialog } from 'react-native-paper';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutService, WorkoutSessionWithExercises } from '../../services/workouts';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
@@ -177,7 +177,11 @@ export default function DashboardScreen() {
           {recentSessions && recentSessions.length > 0 ? (
             <>
               {recentSessions.map((session) => (
-                <SessionCard key={session.id} session={session} />
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  isViewingOtherUser={isViewingOtherUser}
+                />
               ))}
               {stats && recentSessions.length < (stats.totalSessions || 0) && (
                 <Button
@@ -209,9 +213,35 @@ export default function DashboardScreen() {
 
 interface SessionCardProps {
   session: WorkoutSessionWithExercises;
+  isViewingOtherUser?: boolean;
 }
 
-function SessionCard({ session }: SessionCardProps) {
+function SessionCard({ session, isViewingOtherUser }: SessionCardProps) {
+  const { navigate } = useNavigation();
+  const queryClient = useQueryClient();
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+
+  const deleteSession = useMutation({
+    mutationFn: () => workoutService.deleteSession(session.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recentSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['userStats'] });
+      queryClient.invalidateQueries({ queryKey: ['allSessions'] });
+      setShowDeleteDialog(false);
+    },
+  });
+
+  const handleEdit = () => {
+    navigate('editWorkout', { sessionId: session.id });
+  };
+
+  const handleDelete = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = () => {
+    deleteSession.mutate();
+  };
   const formatDate = (dateString: string) => {
     // Parse as local date to avoid timezone issues
     const [year, month, day] = dateString.split('-').map(Number);
@@ -230,19 +260,39 @@ function SessionCard({ session }: SessionCardProps) {
   ) || 0;
 
   return (
-    <Card style={styles.sessionCard}>
-      <Card.Content>
-        <View style={styles.sessionHeader}>
-          <View>
-            <Text variant="titleMedium">{formatDate(session.session_date)}</Text>
-            {session.category && (
-              <Chip compact mode="outlined" style={styles.dayCategoryChip}>
-                {session.category}
-              </Chip>
+    <>
+      <Card style={styles.sessionCard}>
+        <Card.Content>
+          <View style={styles.sessionHeader}>
+            <View style={styles.sessionHeaderLeft}>
+              <View>
+                <Text variant="titleMedium">{formatDate(session.session_date)}</Text>
+                {session.category && (
+                  <Chip compact mode="outlined" style={styles.dayCategoryChip}>
+                    {session.category}
+                  </Chip>
+                )}
+              </View>
+              <Chip compact>{totalExercises} exercises</Chip>
+            </View>
+            {!isViewingOtherUser && (
+              <View style={styles.sessionActions}>
+                <IconButton
+                  icon="pencil"
+                  size={20}
+                  onPress={handleEdit}
+                  style={styles.actionIcon}
+                />
+                <IconButton
+                  icon="delete"
+                  size={20}
+                  iconColor="#f44336"
+                  onPress={handleDelete}
+                  style={styles.actionIcon}
+                />
+              </View>
             )}
           </View>
-          <Chip compact>{totalExercises} exercises</Chip>
-        </View>
 
         {/* Exercise list with detailed sets */}
         <View style={styles.exerciseList}>
@@ -269,6 +319,28 @@ function SessionCard({ session }: SessionCardProps) {
         </View>
       </Card.Content>
     </Card>
+
+    <Portal>
+      <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
+        <Dialog.Title>Delete Workout</Dialog.Title>
+        <Dialog.Content>
+          <Text variant="bodyMedium">
+            Are you sure you want to delete this workout from {formatDate(session.session_date)}? This action cannot be undone.
+          </Text>
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+          <Button
+            onPress={confirmDelete}
+            loading={deleteSession.isPending}
+            textColor="#f44336"
+          >
+            Delete
+          </Button>
+        </Dialog.Actions>
+      </Dialog>
+    </Portal>
+  </>
   );
 }
 
@@ -344,6 +416,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  sessionHeaderLeft: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    flex: 1,
+  },
+  sessionActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  actionIcon: {
+    margin: 0,
   },
   dayCategoryChip: {
     alignSelf: 'flex-start',
