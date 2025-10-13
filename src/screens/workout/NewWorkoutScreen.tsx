@@ -205,6 +205,12 @@ export default function NewWorkoutScreen() {
     setExercises(updated);
   };
 
+  const updateExerciseName = (exerciseIndex: number, newName: string) => {
+    const updated = [...exercises];
+    updated[exerciseIndex].exerciseName = newName;
+    setExercises(updated);
+  };
+
   const addExercise = (exerciseId: string, exerciseName: string) => {
     const newExercise: WorkoutExercise = {
       exerciseId,
@@ -535,18 +541,22 @@ export default function NewWorkoutScreen() {
       {/* Exercises List */}
       {exercises.map((exercise, exerciseIndex) => (
         <Card key={exerciseIndex} style={styles.section}>
-          <Card.Title
-            title={exercise.exerciseName}
-            right={(props) => (
+          <Card.Content>
+            <View style={styles.exerciseHeader}>
+              <TextInput
+                value={exercise.exerciseName}
+                onChangeText={(value) => updateExerciseName(exerciseIndex, value)}
+                mode="outlined"
+                style={styles.exerciseNameInput}
+                dense
+              />
               <IconButton
-                {...props}
                 icon="delete"
                 iconColor="#f44336"
                 onPress={() => deleteExercise(exerciseIndex)}
+                size={20}
               />
-            )}
-          />
-          <Card.Content>
+            </View>
             <View style={styles.exerciseBlock}>
               {exercise.sets.map((set, setIndex) => (
                 <View key={setIndex} style={styles.setEditRow}>
@@ -778,6 +788,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
     padding: 20,
+  },
+  exerciseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  exerciseNameInput: {
+    flex: 1,
   },
   exerciseBlock: {
     gap: 8,
