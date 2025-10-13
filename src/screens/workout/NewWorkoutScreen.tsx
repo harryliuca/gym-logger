@@ -597,6 +597,18 @@ export default function NewWorkoutScreen() {
         </Card>
       ))}
 
+      {/* Add Exercise Button */}
+      <View style={styles.addExerciseButtonContainer}>
+        <Button
+          mode="outlined"
+          icon="plus"
+          onPress={() => setShowExerciseModal(true)}
+          style={styles.addExerciseButtonOutlined}
+        >
+          Add Exercise Manually
+        </Button>
+      </View>
+
       {/* Exercise Selection Modal */}
       <Portal>
         <Modal

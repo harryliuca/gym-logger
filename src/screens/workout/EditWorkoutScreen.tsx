@@ -7,6 +7,9 @@ import {
   Card,
   IconButton,
   ActivityIndicator,
+  Portal,
+  Modal,
+  List,
 } from 'react-native-paper';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { workoutService } from '../../services/workouts';
@@ -34,12 +37,20 @@ export default function EditWorkoutScreen() {
   const [workoutCategory, setWorkoutCategory] = useState('');
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
 
   // Fetch the existing session
   const { data: session, isLoading } = useQuery({
     queryKey: ['session', sessionId],
     queryFn: () => workoutService.getSession(sessionId),
     enabled: !!sessionId,
+  });
+
+  // Fetch all exercises for adding manually
+  const { data: allExercises } = useQuery({
+    queryKey: ['allExercises'],
+    queryFn: () => workoutService.getExercises(),
   });
 
   // Load session data into form
@@ -160,6 +171,21 @@ export default function EditWorkoutScreen() {
   const deleteExercise = (exerciseIndex: number) => {
     const updated = exercises.filter((_, index) => index !== exerciseIndex);
     setExercises(updated);
+  };
+
+  const addExercise = (exerciseId: string, exerciseName: string) => {
+    const newExercise: WorkoutExercise = {
+      exerciseId,
+      exerciseName,
+      sets: [
+        { reps: '10', weight: '' },
+        { reps: '10', weight: '' },
+        { reps: '10', weight: '' },
+      ],
+    };
+    setExercises([...exercises, newExercise]);
+    setShowExerciseModal(false);
+    setExerciseSearch('');
   };
 
   const handleSave = () => {
@@ -313,6 +339,73 @@ export default function EditWorkoutScreen() {
         </Card>
       ))}
 
+      {/* Add Exercise Button */}
+      <View style={styles.addExerciseButtonContainer}>
+        <Button
+          mode="outlined"
+          icon="plus"
+          onPress={() => setShowExerciseModal(true)}
+          style={styles.addExerciseButtonOutlined}
+        >
+          Add Exercise Manually
+        </Button>
+      </View>
+
+      {/* Exercise Selection Modal */}
+      <Portal>
+        <Modal
+          visible={showExerciseModal}
+          onDismiss={() => {
+            setShowExerciseModal(false);
+            setExerciseSearch('');
+          }}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Text variant="headlineSmall" style={styles.modalTitle}>
+            Add Exercise
+          </Text>
+          <TextInput
+            label="Search exercises"
+            value={exerciseSearch}
+            onChangeText={setExerciseSearch}
+            mode="outlined"
+            style={styles.searchInput}
+            autoFocus
+          />
+          <ScrollView style={styles.modalScroll}>
+            {allExercises
+              ?.filter(ex =>
+                ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
+              )
+              .map((exercise) => (
+                <List.Item
+                  key={exercise.id}
+                  title={exercise.canonical_name}
+                  description={exercise.category || 'Exercise'}
+                  left={(props) => <List.Icon {...props} icon="weight-lifter" />}
+                  onPress={() => addExercise(exercise.id, exercise.canonical_name)}
+                  style={styles.templateItem}
+                />
+              ))}
+            {allExercises && allExercises.filter(ex =>
+              ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
+            ).length === 0 && (
+              <Text style={styles.noResults}>No exercises found</Text>
+            )}
+          </ScrollView>
+          <Button
+            mode="outlined"
+            onPress={() => {
+              setShowExerciseModal(false);
+              setExerciseSearch('');
+            }}
+            style={styles.modalCloseButton}
+          >
+            Cancel
+          </Button>
+        </Modal>
+      </Portal>
+
       {/* Bottom Padding */}
       <View style={styles.bottomPadding} />
     </ScrollView>
@@ -388,6 +481,44 @@ const styles = StyleSheet.create({
   unitLabel: {
     color: '#666',
     minWidth: 20,
+  },
+  addExerciseButtonContainer: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  addExerciseButtonOutlined: {
+    width: '100%',
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    margin: 20,
+    borderRadius: 8,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    padding: 20,
+    paddingBottom: 12,
+    fontWeight: 'bold',
+  },
+  searchInput: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  templateItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalCloseButton: {
+    margin: 16,
+    marginTop: 8,
+  },
+  noResults: {
+    textAlign: 'center',
+    color: '#666',
+    padding: 20,
   },
   bottomPadding: {
     height: 32,
