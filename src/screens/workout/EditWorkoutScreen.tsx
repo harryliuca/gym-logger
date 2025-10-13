@@ -113,9 +113,22 @@ export default function EditWorkoutScreen() {
         console.log(`Exercise ${i}: ${exercise.exerciseName}, sets:`, sets);
 
         if (sets.length > 0) {
+          // Find or create exercise by name
+          let exerciseId = allExercises?.find(ex =>
+            ex.canonical_name.toLowerCase() === exercise.exerciseName.toLowerCase()
+          )?.id;
+
+          if (!exerciseId) {
+            console.log('Creating new exercise:', exercise.exerciseName);
+            const newEx = await workoutService.createExercise(exercise.exerciseName);
+            exerciseId = newEx.id;
+            // Invalidate exercises query to refresh the list
+            queryClient.invalidateQueries({ queryKey: ['allExercises'] });
+          }
+
           await workoutService.addExerciseToSession(
             session.id,
-            exercise.exerciseId,
+            exerciseId,
             sets,
             i
           );
