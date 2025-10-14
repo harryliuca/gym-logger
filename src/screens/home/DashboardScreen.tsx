@@ -452,18 +452,20 @@ function SessionCard({ session, isViewingOtherUser }: SessionCardProps) {
         {/* Exercise list with detailed sets */}
         <View style={styles.exerciseList}>
           {session.session_exercises?.map((ex) => (
-            <View key={ex.id} style={styles.exerciseBlock}>
-              <Text variant="bodyMedium" style={styles.exerciseName}>
-                {ex.exercises.canonical_name}
-              </Text>
-              <View style={styles.setsContainer}>
-                {ex.sets?.map((set, idx) => (
-                  <Text key={idx} variant="bodySmall" style={styles.setDetail}>
-                    {set.reps} × {set.weight} lb
-                  </Text>
-                ))}
+            ex.exercises ? (
+              <View key={ex.id} style={styles.exerciseBlock}>
+                <Text variant="bodyMedium" style={styles.exerciseName}>
+                  {ex.exercises.canonical_name}
+                </Text>
+                <View style={styles.setsContainer}>
+                  {ex.sets?.map((set, idx) => (
+                    <Text key={idx} variant="bodySmall" style={styles.setDetail}>
+                      {set.reps} × {set.weight} lb
+                    </Text>
+                  ))}
+                </View>
               </View>
-            </View>
+            ) : null
           ))}
         </View>
 
