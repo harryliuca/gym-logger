@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService, AuthUser } from '../services/auth';
+import { profileService } from '../services/workouts';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -16,19 +17,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Check active session on mount
-    authService.getCurrentUser().then((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    authService
+      .getCurrentUser()
+      .then((currentUser) => {
+        if (isMounted) {
+          setUser(currentUser);
+          setLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.warn('Auth session lookup failed:', error);
+        if (isMounted) {
+          setUser(null);
+          setLoading(false);
+        }
+      });
 
     // Listen for auth changes
-    const { data: authListener } = authService.onAuthStateChange((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    let authListener: ReturnType<typeof authService.onAuthStateChange> | undefined;
+    try {
+      authListener = authService.onAuthStateChange((currentUser) => {
+        if (isMounted) {
+          setUser(currentUser);
+          setLoading(false);
+        }
+      });
+    } catch (error) {
+      console.warn('Auth state listener failed to initialise:', error);
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
 
     return () => {
+      isMounted = false;
       authListener?.subscription.unsubscribe();
     };
   }, []);
@@ -50,6 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: authUser.id,
         email: authUser.email || '',
       });
+
+      try {
+        await profileService.togglePublicProfile(true);
+      } catch (error) {
+        console.warn('Failed to set profile public by default:', error);
+      }
     }
   };
 

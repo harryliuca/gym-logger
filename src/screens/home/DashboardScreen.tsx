@@ -1,19 +1,30 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Alert } from 'react-native';
-import { Text, Card, Button, ActivityIndicator, Chip, IconButton, Portal, Dialog } from 'react-native-paper';
+import { View, ScrollView, StyleSheet } from 'react-native';
+import { Text, Card, Button, ActivityIndicator, Chip, IconButton, Portal, Dialog, TextInput } from 'react-native-paper';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutService, WorkoutSessionWithExercises } from '../../services/workouts';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
+import { useAppExperience } from '../../contexts/AppExperienceContext';
+
+type WebShareData = {
+  title?: string;
+  text?: string;
+  url?: string;
+};
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
   const { navigate, params } = useNavigation();
+  const { guestViewingUserId, requireAuth } = useAppExperience();
   const [sessionLimit, setSessionLimit] = React.useState(3);
+  const [inviteDialogVisible, setInviteDialogVisible] = React.useState(false);
+  const [copyFeedback, setCopyFeedback] = React.useState('');
 
   // Check if viewing another user's profile
-  const viewingUserId = params?.userId;
+  const viewingUserId = params?.userId || guestViewingUserId;
   const isViewingOtherUser = viewingUserId && viewingUserId !== user?.id;
+  const isGuestViewingInvite = !user && !!viewingUserId && viewingUserId === guestViewingUserId;
 
   // Fetch user stats (for current user or public user)
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -37,6 +48,79 @@ export default function DashboardScreen() {
 
   const handleViewMore = () => {
     setSessionLimit(prev => prev + 5);
+  };
+
+  const inviteLink = React.useMemo(() => {
+    const baseUrl =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://gym-logger.netlify.app';
+    if (user?.id) {
+      return `${baseUrl}?invite=${user.id}`;
+    }
+    return baseUrl;
+  }, [user?.id]);
+
+  const inviteMessage = React.useMemo(() => {
+    return `Join me on Gym Logger to track workouts with voice or manual entry: ${inviteLink}`;
+  }, [inviteLink]);
+
+  const handleNewWorkout = React.useCallback(() => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
+    navigate('newWorkout');
+  }, [navigate, requireAuth, user]);
+
+  const handleInvitePress = async () => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
+
+    const shareData: WebShareData = {
+      title: 'Join me on Gym Logger',
+      text: inviteMessage,
+      url: inviteLink,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error: any) {
+        // If user cancels share, silently ignore; otherwise fall back to dialog
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.warn('Navigator share failed, showing invite dialog fallback.', error);
+      }
+    }
+
+    setInviteDialogVisible(true);
+    setCopyFeedback('');
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(inviteLink);
+        setCopyFeedback('Link copied!');
+        setTimeout(() => setCopyFeedback(''), 2000);
+        return;
+      } catch (error) {
+        console.warn('Clipboard write failed', error);
+      }
+    }
+
+    setCopyFeedback('Copy not supported. Manually copy the link below.');
+    setTimeout(() => setCopyFeedback(''), 4000);
+  };
+
+  const closeInviteDialog = () => {
+    setInviteDialogVisible(false);
+    setCopyFeedback('');
   };
 
   const formatDate = (dateString: string) => {
@@ -69,17 +153,19 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         {isViewingOtherUser ? (
           <View style={styles.headerLeft}>
-            <IconButton
-              icon="arrow-left"
-              size={24}
-              onPress={() => navigate('browsePublicProfiles')}
-            />
+            {!isGuestViewingInvite && (
+              <IconButton
+                icon="arrow-left"
+                size={24}
+                onPress={() => navigate('browsePublicProfiles')}
+              />
+            )}
             <View>
               <Text variant="headlineMedium" style={styles.title}>
-                Public Profile
+                {isGuestViewingInvite ? 'Gym Logger' : 'Public Profile'}
               </Text>
               <Text variant="bodyMedium" style={styles.subtitle}>
-                Viewing workout history
+                {isGuestViewingInvite ? 'Preview workout tracking' : 'Viewing workout history'}
               </Text>
             </View>
           </View>
@@ -138,34 +224,70 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* Quick Actions - Only show for own profile */}
-      {!isViewingOtherUser && (
+      {/* Quick Actions */}
+      {(!isViewingOtherUser || isGuestViewingInvite) && (
         <Card style={styles.section}>
-          <Card.Title title="Quick Actions" />
+          <Card.Title
+            title={user ? 'Quick Actions' : 'Ready to log your own workouts?'}
+          />
           <Card.Content>
             <Button
               mode="contained"
               icon="plus"
-              onPress={() => navigate('newWorkout')}
+              onPress={handleNewWorkout}
               style={styles.actionButton}
             >
-              New Workout
+              {user ? 'New Workout' : 'Start Your Own Workout'}
             </Button>
-            <Button
-              mode="outlined"
-              icon="chart-line"
-              onPress={() => navigate('stats')}
-              style={styles.actionButton}
-            >
-              View Statistics
-            </Button>
-            <Button
-              mode="outlined"
-              icon="account-group"
-              onPress={() => navigate('browsePublicProfiles')}
-            >
-              Browse Public Profiles
-            </Button>
+
+            {user ? (
+              <>
+                <Button
+                  mode="outlined"
+                  icon="chart-line"
+                  onPress={() => navigate('stats')}
+                  style={styles.actionButton}
+                >
+                  View Statistics
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="account-group"
+                  onPress={() => navigate('browsePublicProfiles')}
+                >
+                  Browse Public Profiles
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="link"
+                  onPress={handleCopyInviteLink}
+                  style={styles.actionButton}
+                >
+                  Copy Invite Link
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="share-variant"
+                  onPress={handleInvitePress}
+                  style={styles.actionButton}
+                >
+                  Invite Friends
+                </Button>
+              </>
+            ) : (
+              <Button
+                mode="outlined"
+                icon="account-group"
+                onPress={() => navigate('browsePublicProfiles')}
+              >
+                Explore Public Profiles
+              </Button>
+            )}
+            {copyFeedback && !inviteDialogVisible && (
+              <Text variant="bodySmall" style={styles.copyFeedback}>
+                {copyFeedback}
+              </Text>
+            )}
           </Card.Content>
         </Card>
       )}
@@ -207,6 +329,39 @@ export default function DashboardScreen() {
           Gym Logger v1.0.0
         </Text>
       </View>
+
+      <Portal>
+        <Dialog
+          visible={inviteDialogVisible}
+          onDismiss={closeInviteDialog}
+        >
+          <Dialog.Title>Invite Friends</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={styles.inviteDescription}>
+              Share this link so friends can sign up for Gym Logger:
+            </Text>
+            <TextInput
+              value={inviteLink}
+              mode="outlined"
+              editable={false}
+              style={styles.inviteLinkInput}
+              selectTextOnFocus
+            />
+            {copyFeedback ? (
+              <Text variant="bodySmall" style={styles.copyFeedback}>
+                {copyFeedback}
+              </Text>
+            ) : null}
+            <Text variant="bodySmall" style={styles.inviteHint}>
+              Tip: Use the share button for quick sharing on supported browsers.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={handleCopyInviteLink}>Copy Link</Button>
+            <Button onPress={closeInviteDialog}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -470,6 +625,21 @@ const styles = StyleSheet.create({
   volumeText: {
     color: '#666',
     fontWeight: '600',
+  },
+  inviteDescription: {
+    marginBottom: 12,
+  },
+  inviteLinkInput: {
+    marginTop: 4,
+  },
+  copyFeedback: {
+    marginTop: 6,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  inviteHint: {
+    marginTop: 6,
+    color: '#666',
   },
   versionFooter: {
     padding: 16,

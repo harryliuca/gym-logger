@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 export type Screen = 'dashboard' | 'history' | 'newWorkout' | 'editWorkout' | 'sessionDetail' | 'stats' | 'browsePublicProfiles' | 'publicProfile';
 
@@ -10,9 +10,27 @@ interface NavigationContextType {
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
 
-export function NavigationProvider({ children }: { children: ReactNode }) {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
-  const [params, setParams] = useState<any>(null);
+interface NavigationProviderProps {
+  children: ReactNode;
+  initialScreen?: Screen;
+  initialParams?: any;
+}
+
+export function NavigationProvider({
+  children,
+  initialScreen = 'dashboard',
+  initialParams = null,
+}: NavigationProviderProps) {
+  const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen);
+  const [params, setParams] = useState<any>(initialParams);
+
+  useEffect(() => {
+    setCurrentScreen(initialScreen);
+  }, [initialScreen]);
+
+  useEffect(() => {
+    setParams(initialParams || null);
+  }, [initialParams]);
 
   const navigate = (screen: Screen, screenParams?: any) => {
     setCurrentScreen(screen);

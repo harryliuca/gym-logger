@@ -22,7 +22,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   -- Stats
   total_sessions INTEGER DEFAULT 0,
   total_volume DECIMAL(10,2) DEFAULT 0, -- Total weight lifted all time
-  last_workout_date DATE
+  last_workout_date DATE,
+
+  -- Public profile
+  is_public BOOLEAN DEFAULT true,
+  public_username TEXT
 );
 
 -- Enable Row Level Security
@@ -229,11 +233,17 @@ CREATE TRIGGER update_workout_sessions_updated_at BEFORE UPDATE ON public.workou
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, display_name)
+  INSERT INTO public.profiles (id, email, display_name, is_public, public_username)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    true,
+    COALESCE(
+      NEW.raw_user_meta_data->>'username',
+      NEW.raw_user_meta_data->>'full_name',
+      split_part(NEW.email, '@', 1)
+    )
   );
   RETURN NEW;
 END;

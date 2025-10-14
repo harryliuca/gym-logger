@@ -3,7 +3,7 @@
 
 -- 1. Add is_public column to profiles table
 ALTER TABLE public.profiles
-ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT true;
 
 -- 2. Add public_username for public profiles (optional display name)
 ALTER TABLE public.profiles
@@ -48,12 +48,13 @@ CREATE POLICY "Anyone can view public exercise stats" ON public.user_exercise_st
     )
   );
 
--- 8. Set your profile as public (replace with your actual email)
+-- 8. (Optional) Update existing profiles to be public
 UPDATE public.profiles
-SET is_public = true, public_username = 'Harry'
-WHERE email = 'harry.liu.ca@gmail.com';
+SET is_public = true
+WHERE is_public IS NOT TRUE;
 
 -- Verify the changes
 SELECT id, email, display_name, public_username, is_public
 FROM public.profiles
-WHERE email = 'harry.liu.ca@gmail.com';
+ORDER BY created_at DESC
+LIMIT 5;
