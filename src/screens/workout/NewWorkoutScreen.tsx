@@ -7,9 +7,6 @@ import {
   Card,
   IconButton,
   Menu,
-  Portal,
-  Modal,
-  List,
 } from 'react-native-paper';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { workoutService, templateService } from '../../services/workouts';
@@ -39,8 +36,6 @@ export default function NewWorkoutScreen() {
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [loadedFromTemplate, setLoadedFromTemplate] = useState(false);
-  const [showExerciseModal, setShowExerciseModal] = useState(false);
-  const [exerciseSearch, setExerciseSearch] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -224,19 +219,19 @@ export default function NewWorkoutScreen() {
     setExercises(updated);
   };
 
-  const addExercise = (exerciseId: string, exerciseName: string) => {
+  const addManualExercise = () => {
     const newExercise: WorkoutExercise = {
-      exerciseId,
-      exerciseName,
+      exerciseId: '',
+      exerciseName: '',
       sets: [
-        { reps: '10', weight: '' },
-        { reps: '10', weight: '' },
-        { reps: '10', weight: '' },
+        { reps: '', weight: '' },
+        { reps: '', weight: '' },
+        { reps: '', weight: '' },
       ],
     };
     setExercises([...exercises, newExercise]);
-    setShowExerciseModal(false);
-    setExerciseSearch('');
+    setVoiceTranscript('');
+    setSuccessMessage('');
   };
 
   const startVoiceInput = async () => {
@@ -561,6 +556,7 @@ export default function NewWorkoutScreen() {
                 onChangeText={(value) => updateExerciseName(exerciseIndex, value)}
                 mode="outlined"
                 style={styles.exerciseNameInput}
+                placeholder="Exercise name (e.g., Bench Press)"
                 dense
               />
               <IconButton
@@ -585,7 +581,7 @@ export default function NewWorkoutScreen() {
                     mode="outlined"
                     dense
                     style={styles.setEditInput}
-                    placeholder="0"
+                    placeholder="Reps"
                   />
                   <Text variant="bodySmall" style={styles.setMultiplier}>
                     ×
@@ -599,7 +595,7 @@ export default function NewWorkoutScreen() {
                     mode="outlined"
                     dense
                     style={styles.setEditInput}
-                    placeholder="0"
+                    placeholder="Weight (lb)"
                   />
                   <Text variant="bodySmall" style={styles.unitLabel}>
                     lb
@@ -625,67 +621,12 @@ export default function NewWorkoutScreen() {
         <Button
           mode="outlined"
           icon="plus"
-          onPress={() => setShowExerciseModal(true)}
+          onPress={addManualExercise}
           style={styles.addExerciseButtonOutlined}
         >
           Add Exercise Manually
         </Button>
       </View>
-
-      {/* Exercise Selection Modal */}
-      <Portal>
-        <Modal
-          visible={showExerciseModal}
-          onDismiss={() => {
-            setShowExerciseModal(false);
-            setExerciseSearch('');
-          }}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <Text variant="headlineSmall" style={styles.modalTitle}>
-            Add Exercise
-          </Text>
-          <TextInput
-            label="Search exercises"
-            value={exerciseSearch}
-            onChangeText={setExerciseSearch}
-            mode="outlined"
-            style={styles.searchInput}
-            autoFocus
-          />
-          <ScrollView style={styles.modalScroll}>
-            {allExercises
-              ?.filter(ex =>
-                ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
-              )
-              .map((exercise) => (
-                <List.Item
-                  key={exercise.id}
-                  title={exercise.canonical_name}
-                  description={exercise.category || 'Exercise'}
-                  left={(props) => <List.Icon {...props} icon="weight-lifter" />}
-                  onPress={() => addExercise(exercise.id, exercise.canonical_name)}
-                  style={styles.templateItem}
-                />
-              ))}
-            {allExercises && allExercises.filter(ex =>
-              ex.canonical_name.toLowerCase().includes(exerciseSearch.toLowerCase())
-            ).length === 0 && (
-              <Text style={styles.noResults}>No exercises found</Text>
-            )}
-          </ScrollView>
-          <Button
-            mode="outlined"
-            onPress={() => {
-              setShowExerciseModal(false);
-              setExerciseSearch('');
-            }}
-            style={styles.modalCloseButton}
-          >
-            Cancel
-          </Button>
-        </Modal>
-      </Portal>
 
       {/* Bottom Padding */}
       <View style={styles.bottomPadding} />
@@ -793,15 +734,6 @@ const styles = StyleSheet.create({
   addExerciseButtonOutlined: {
     width: '100%',
   },
-  searchInput: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-  },
-  noResults: {
-    textAlign: 'center',
-    color: '#666',
-    padding: 20,
-  },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -838,28 +770,6 @@ const styles = StyleSheet.create({
   unitLabel: {
     color: '#666',
     minWidth: 20,
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    margin: 20,
-    borderRadius: 8,
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    padding: 20,
-    paddingBottom: 12,
-    fontWeight: 'bold',
-  },
-  modalScroll: {
-    maxHeight: 400,
-  },
-  templateItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalCloseButton: {
-    margin: 16,
-    marginTop: 8,
   },
   bottomPadding: {
     height: 32,
