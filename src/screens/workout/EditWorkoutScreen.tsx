@@ -79,6 +79,8 @@ export default function EditWorkoutScreen() {
   const saveWorkout = useMutation({
     mutationFn: async () => {
       if (!session) throw new Error('Session not found');
+      const normalizedDate = date.trim();
+      if (!normalizedDate) throw new Error('Workout date is required');
 
       console.log('Starting edit save - deleting existing exercises');
 
@@ -87,13 +89,19 @@ export default function EditWorkoutScreen() {
         await workoutService.deleteSessionExercise(exercise.id);
       }
 
-      console.log('Updating category to:', workoutCategory);
+      console.log('Updating session metadata:', {
+        category: workoutCategory,
+        date: normalizedDate,
+      });
 
       // Step 2: Update session category using direct Supabase call
       const { supabase } = await import('../../services/supabase');
       await supabase
         .from('workout_sessions')
-        .update({ category: workoutCategory || null })
+        .update({
+          category: workoutCategory || null,
+          session_date: normalizedDate,
+        })
         .eq('id', session.id);
 
       console.log('Adding new exercises:', exercises.length);
@@ -208,6 +216,11 @@ export default function EditWorkoutScreen() {
   };
 
   const handleSave = () => {
+    if (!date.trim()) {
+      setErrorMessage('Please enter a workout date');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
     if (exercises.length === 0) {
       setErrorMessage('Please keep at least one exercise in your workout');
       setTimeout(() => setErrorMessage(''), 3000);
@@ -264,9 +277,10 @@ export default function EditWorkoutScreen() {
           <TextInput
             label="Date"
             value={date}
+            onChangeText={setDate}
             mode="outlined"
             style={styles.input}
-            disabled
+            placeholder="YYYY-MM-DD"
           />
 
           <TextInput

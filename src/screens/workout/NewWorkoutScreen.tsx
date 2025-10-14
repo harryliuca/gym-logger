@@ -24,11 +24,19 @@ interface WorkoutExercise {
   sets: ExerciseSet[];
 }
 
+// Return YYYY-MM-DD in the user's local timezone to avoid UTC off-by-one issues
+const getLocalDateString = () => {
+  const now = new Date();
+  const offsetMillis = now.getTimezoneOffset() * 60 * 1000;
+  const localTime = new Date(now.getTime() - offsetMillis);
+  return localTime.toISOString().split('T')[0];
+};
+
 export default function NewWorkoutScreen() {
   const { navigate } = useNavigation();
   const queryClient = useQueryClient();
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalDateString());
   const [workoutCategory, setWorkoutCategory] = useState('');
   const [isGeneratingCategory, setIsGeneratingCategory] = useState(false);
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
