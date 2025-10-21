@@ -1,0 +1,23 @@
+{
+  "name": "Gym Logger",
+  "short_name": "Gym Logger",
+  "description": "Track your workout progress",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#3B9AE1",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/assets/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
