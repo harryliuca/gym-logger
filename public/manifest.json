@@ -5,19 +5,19 @@
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#3B9AE1",
-  "background_color": "#ffffff",
+  "background_color": "#3B9AE1",
   "icons": [
-    {
-      "src": "/assets/icon-maskable.png",
-      "sizes": "1024x1024",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
     {
       "src": "/assets/icon.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-maskable.png",
+      "sizes": "512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
